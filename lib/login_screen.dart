@@ -2,64 +2,60 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'register_screen.dart';
 
-class LoginScreen extends StatefulWidget {
-  @override
-  _LoginScreenState createState() => _LoginScreenState();
-}
-
-class _LoginScreenState extends State<LoginScreen> {
+class LoginScreen extends StatelessWidget {
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  String errorMessage = '';
 
-  void login() async {
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+
+  void login(BuildContext context) async {
     try {
       await _auth.signInWithEmailAndPassword(
         email: emailController.text.trim(),
         password: passwordController.text.trim(),
       );
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Login successful!')),
-      );
-      // TODO: Navigate to main app screen
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Login successful")));
+      // TODO: Navigate to home screen
     } on FirebaseAuthException catch (e) {
-      setState(() {
-        errorMessage = e.message ?? 'Login failed';
-      });
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.message ?? "Login failed")));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('NightGuard Login')),
+      appBar: AppBar(title: const Text("Login")),
       body: Padding(
-        padding: EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16.0),
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             TextField(
               controller: emailController,
-              decoration: InputDecoration(labelText: 'Email'),
+              decoration: const InputDecoration(labelText: "Email"),
             ),
+            const SizedBox(height: 10),
             TextField(
               controller: passwordController,
-              decoration: InputDecoration(labelText: 'Password'),
               obscureText: true,
+              decoration: const InputDecoration(labelText: "Password"),
             ),
-            SizedBox(height: 20),
-            ElevatedButton(onPressed: login, child: Text('Login')),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () => login(context),
+              child: const Text("Login"),
+            ),
             TextButton(
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => RegisterScreen()),
+                  MaterialPageRoute(builder: (context) => RegisterScreen()),
                 );
               },
-              child: Text('Don’t have an account? Register'),
+              child: const Text("Don’t have an account? Register"),
             ),
-            if (errorMessage.isNotEmpty)
-              Text(errorMessage, style: TextStyle(color: Colors.red)),
           ],
         ),
       ),
