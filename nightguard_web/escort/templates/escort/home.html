@@ -49,18 +49,62 @@
     </div>
 
     <!-- Status -->
-    <h4 class="text-center mt-4">No active escort</h4>
+    <h4 class="text-center mt-4">
+        {% if active_session %}
+            Escort Status: {{ active_session.status }}
+        {% else %}
+            No active escort
+        {% endif %}
+    </h4>
 
     <!-- Map -->
     <div id="map" class="map-container"></div>
 
     <!-- Buttons -->
     <div class="d-grid gap-3">
-        <button class="btn btn-success btn-wide">Request Escort</button>
-        <button class="btn btn-danger btn-wide">Panic</button>
+        <button id="request-btn" class="btn btn-success btn-wide">Request Escort</button>
+        <button id="panic-btn" class="btn btn-danger btn-wide">Panic</button>
     </div>
 
-</div>
+    <!-- Feedback message -->
+    <div id="feedback" class="mt-2 text-center text-white"></div>
+
+    <script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const feedback = document.getElementById("feedback");
+
+        function sendPost(url) {
+            fetch(url, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": "{{ csrf_token }}"
+                },
+                body: JSON.stringify({})
+            })
+            .then(res => res.json())
+            .then(data => {
+                feedback.textContent = data.message || data.status || "Action completed!";
+                feedback.style.color = data.status === "Panic" ? "red" : "lime";
+            })
+            .catch(err => {
+                feedback.textContent = "Error: Could not complete request.";
+                feedback.style.color = "orange";
+                console.error(err);
+            });
+        }
+
+        document.getElementById("request-btn").addEventListener("click", () => {
+            sendPost("{% url 'request_escort' %}");
+        });
+
+        document.getElementById("panic-btn").addEventListener("click", () => {
+            sendPost("{% url 'panic' %}");
+        });
+    });
+    </script>
+
+    </div>
 
 <!-- Map Script -->
 <script>
@@ -73,17 +117,42 @@
         }).addTo(map);
 
         if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(pos => {
+            let userMarker = null;
+
+            navigator.geolocation.watchPosition(pos => {
                 const lat = pos.coords.latitude;
                 const lon = pos.coords.longitude;
-                map.setView([lat, lon], 16);
-                L.marker([lat, lon]).addTo(map)
-                    .bindPopup("You are here")
-                    .openPopup();
-            }, () => alert("Could not get location"));
-        } else {
+
+                // Update map position
+                if (!userMarker) {
+                    map.setView([lat, lon], 16);
+                    userMarker = L.marker([lat, lon]).addTo(map)
+                        .bindPopup("You are here")
+                        .openPopup();
+                } else {
+                    userMarker.setLatLng([lat, lon]);
+                }
+
+                // Send coordinates to backend
+                fetch("{% url 'update_location' %}", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRFToken": "{{ csrf_token }}"
+                    },
+                    body: JSON.stringify({ lat: lat, lon: lon })
+                }).catch(err => console.error("Location update failed:", err));
+
+            }, err => console.error(err), {
+                enableHighAccuracy: true,
+                maximumAge: 0,
+                timeout: 5000
+            });
+        }
+        else {
             alert("Geolocation not supported by your browser.");
         }
+
     });
 </script>
 
