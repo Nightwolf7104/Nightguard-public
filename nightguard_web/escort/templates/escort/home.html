@@ -40,9 +40,8 @@
 
     <!-- Top Bar -->
     <div class="top-bar">
-        <a href="#" class="btn btn-outline-secondary">
-            ⚙️
-        </a>
+        <a href="{% url 'settings' %}" class="btn btn-outline-secondary">⚙️</a>
+
         <a href="{% url 'logout' %}" class="btn btn-outline-danger">
             Logout
         </a>
@@ -95,8 +94,33 @@
         }
 
         document.getElementById("request-btn").addEventListener("click", () => {
-            sendPost("{% url 'request_escort' %}");
+            const destination = prompt("Enter your destination:");
+            if (!destination) return;
+
+            fetch("{% url 'request_escort' %}", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": "{{ csrf_token }}"
+                },
+                body: JSON.stringify({ destination: destination })
+            })
+            .then(res => res.json())
+            .then(data => {
+                feedback.textContent = data.message || "Escort requested!";
+                feedback.style.color = "lime";
+
+                if (data.session_id) {
+                    window.location.href = "{% url 'escort' %}";
+                }
+            })
+            .catch(err => {
+                feedback.textContent = "Error requesting escort!";
+                feedback.style.color = "orange";
+                console.error(err);
+            });
         });
+
 
         document.getElementById("panic-btn").addEventListener("click", () => {
             sendPost("{% url 'panic' %}");
