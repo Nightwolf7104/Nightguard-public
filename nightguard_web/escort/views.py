@@ -5,8 +5,11 @@ from django.contrib.auth.decorators import login_required
 from django.utils import timezone
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
+from django.core.mail import send_mail
+from django.conf import settings
 import json
 from .models import EscortSession
+from zoneinfo import ZoneInfo
 import requests
 
 # ---------- AUTH ----------
@@ -82,24 +85,81 @@ def request_escort(request):
             return JsonResponse({"error": str(e)}, status=400)
 
     return JsonResponse({"error": "Invalid request method"}, status=405)
-
-
+    
+def get_address_from_coords(lat, lon):
+    try:
+        url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}"
+        response = requests.get(url, headers={"User-Agent": "NightGuardApp"})
+        data = response.json()
+        return data.get("display_name", "Address not available")
+    except Exception:
+        return "Address not available"
 
 # PANIC
 @login_required
 def panic_view(request):
     if request.method == "POST":
+        # Create a panic session
         session = EscortSession.objects.create(
             user=request.user,
             start_time=timezone.now(),
             status="Panic"
         )
-        # TODO: Add alert/notification logic here
-        return JsonResponse({
-            "status": session.status,
-            "message": "Panic alert sent!"
-        })
+
+        # Get latest known location if available
+        latest_session = EscortSession.objects.filter(
+            user=request.user
+        ).exclude(location__isnull=True).order_by('-start_time').first()
+
+        # Extract coordinates and get readable address
+        if latest_session and latest_session.location:
+            try:
+                lat, lon = latest_session.location.split(",")
+                address = get_address_from_coords(lat.strip(), lon.strip())
+                map_link = f"https://www.google.com/maps/search/?api=1&query={lat.strip()},{lon.strip()}"
+            except Exception:
+                address = "Location unavailable"
+                map_link = ""
+        else:
+            address = "Not available"
+            map_link = ""
+
+        # Email alert details
+        subject = f" Panic Alert - {request.user.username}"
+        
+        message = (
+            f"PANIC ALERT TRIGGERED \n\n"
+            f"User: {request.user.username}\n"
+            f"Time: {timezone.now().astimezone(ZoneInfo('America/Chicago')).strftime('%Y-%m-%d %H:%M:%S')}\n"
+            f"Location: {address}\n"
+            + (f"Google Map Link: {map_link}\n\n" if map_link else "\n")
+            + "This alert was automatically sent by NightGuard.""\n"
+            +f"Message ID: {timezone.now().timestamp()}"
+
+        )
+
+        recipients = [
+            "akhilsaraswatula@my.unt.edu",
+            "saadsyed@my.unt.edu",
+            "alinaruhi@my.unt.edu",
+            "joshuacharles@my.unt.edu"
+            
+        ]
+
+        try:
+            send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, recipients)
+            return JsonResponse({
+                "status": "Panic",
+                "message": " Panic alert email sent successfully"
+            })
+        except Exception as e:
+            return JsonResponse({
+                "status": "Error",
+                "message": f" Failed to send email: {str(e)}"
+            }, status=500)
+
     return JsonResponse({"error": "Invalid request"}, status=400)
+
 
 
 # LOCATION UPDATES
