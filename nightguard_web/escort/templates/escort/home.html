@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>NightGuard Home</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Leaflet Map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+    <style>
+        body {
+            background-color: #000000;
+        }
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+        }
+        .map-container {
+            height: 400px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        .btn-wide {
+            width: 100%;
+            padding: 15px;
+            font-size: 1.2em;
+        }
+        h4 {
+            color: #ffffff;
+        }
+    </style>
+</head>
+
+<body>
+<div class="container mt-3">
+
+    <!-- Top Bar -->
+    <div class="top-bar">
+        <a href="{% url 'settings' %}" class="btn btn-outline-secondary">⚙️</a>
+
+        <a href="{% url 'logout' %}" class="btn btn-outline-danger">
+            Logout
+        </a>
+    </div>
+
+    <!-- Status -->
+    <h4 class="text-center mt-4">
+        {% if active_session %}
+            Escort Status: {{ active_session.status }}
+        {% else %}
+            No active escort
+        {% endif %}
+    </h4>
+
+    <!-- Map -->
+    <div id="map" class="map-container"></div>
+
+    <!-- Buttons -->
+    <div class="d-grid gap-3">
+        <button id="request-btn" class="btn btn-success btn-wide">Request Escort</button>
+        <button id="panic-btn" class="btn btn-danger btn-wide">Panic</button>
+    </div>
+
+    <!-- Feedback message -->
+    <div id="feedback" class="mt-2 text-center text-white"></div>
+
+    <script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const feedback = document.getElementById("feedback");
+
+        function sendPost(url) {
+            fetch(url, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": "{{ csrf_token }}"
+                },
+                body: JSON.stringify({})
+            })
+            .then(res => res.json())
+            .then(data => {
+                feedback.textContent = data.message || data.status || "Action completed!";
+                feedback.style.color = data.status === "Panic" ? "red" : "lime";
+            })
+            .catch(err => {
+                feedback.textContent = "Error: Could not complete request.";
+                feedback.style.color = "orange";
+                console.error(err);
+            });
+        }
+
+        document.getElementById("request-btn").addEventListener("click", () => {
+            const destination = prompt("Enter your destination:");
+            if (!destination) return;
+
+            fetch("{% url 'request_escort' %}", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": "{{ csrf_token }}"
+                },
+                body: JSON.stringify({ destination: destination })
+            })
+            .then(res => res.json())
+            .then(data => {
+                feedback.textContent = data.message || "Escort requested!";
+                feedback.style.color = "lime";
+
+                if (data.session_id) {
+                    window.location.href = "{% url 'escort' %}";
+                }
+            })
+            .catch(err => {
+                feedback.textContent = "Error requesting escort!";
+                feedback.style.color = "orange";
+                console.error(err);
+            });
+        });
+
+
+        document.getElementById("panic-btn").addEventListener("click", () => {
+            sendPost("{% url 'panic' %}");
+        });
+    });
+    </script>
+
+    </div>
+
+<!-- Map Script -->
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const map = L.map('map').setView([0, 0], 15);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; OpenStreetMap'
+        }).addTo(map);
+
+        if (navigator.geolocation) {
+            let userMarker = null;
+
+            navigator.geolocation.watchPosition(pos => {
+                const lat = pos.coords.latitude;
+                const lon = pos.coords.longitude;
+
+                // Update map position
+                if (!userMarker) {
+                    map.setView([lat, lon], 16);
+                    userMarker = L.marker([lat, lon]).addTo(map)
+                        .bindPopup("You are here")
+                        .openPopup();
+                } else {
+                    userMarker.setLatLng([lat, lon]);
+                }
+
+                // Send coordinates to backend
+                
+
+                fetch("{% url 'update_location' %}", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRFToken": "{{ csrf_token }}"
+                    },
+                    body: JSON.stringify({ lat: lat, lon: lon })
+                }).catch(err => console.error("Location update failed:", err));
+
+            }, err => console.error(err), {
+                enableHighAccuracy: true,
+                maximumAge: 0,
+                timeout: 5000
+            });
+        }
+        else {
+            alert("Geolocation not supported by your browser.");
+        }
+
+    });
+</script>
+
+</body>
+</html>
