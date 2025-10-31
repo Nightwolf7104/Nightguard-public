@@ -1,181 +1,259 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Escort in Progress</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+	<meta charset="UTF-8">
+	<title>Escort in Progress</title>
+	<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+	<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+	<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
-    <style>
-        body {
-            background-color: #000000;
-        }
-        .top-bar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 15px;
-        }
-        .directions-bar {
-            background-color: #222;
-            color: #fff;
-            padding: 10px;
-            border-radius: 5px;
-            margin-bottom: 10px;
-        }
-        .map-container {
-            height: 500px;
-            border-radius: 10px;
-            margin-bottom: 15px;
-        }
-        .info-bar {
-            background-color: #111;
-            color: #fff;
-            padding: 10px;
-            border-radius: 5px;
-            margin-bottom: 15px;
-        }
-        .btn-panic {
-            width: 100%;
-            padding: 20px;
-            font-size: 1.5em;
-        }
-    </style>
+	<style>
+		body {
+			background-color: #000000;
+		}
+		.top-bar {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			padding: 15px;
+		}
+		.directions-bar {
+			background-color: #222;
+			color: #fff;
+			padding: 10px;
+			border-radius: 5px;
+			margin-bottom: 10px;
+		}
+		.map-container {
+			height: 500px;
+			border-radius: 10px;
+			margin-bottom: 15px;
+		}
+		.info-bar {
+			background-color: #111;
+			color: #fff;
+			padding: 10px;
+			border-radius: 5px;
+			margin-bottom: 15px;
+		}
+		.btn-panic {
+			width: 100%;
+			padding: 20px;
+			font-size: 1.5em;
+		}
+	</style>
 </head>
 <body>
-<div class="container mt-3">
+	<div class="container mt-3">
 
-    <!-- Top Bar -->
-    <div class="top-bar">
-        <a href="#" class="btn btn-outline-secondary">⚙️</a>
-        <a href="{% url 'logout' %}" class="btn btn-outline-danger">Logout</a>
-    </div>
+		<!-- Top Bar -->
+		<div class="top-bar">
+			<a href="#" class="btn btn-outline-secondary">⚙️</a>
+			<a href="{% url 'logout' %}" class="btn btn-outline-danger">Logout</a>
+		</div>
 
-    <!-- Directions -->
-    <div class="directions-bar text-center">
-        Directions: {{ directions_text|default:"Calculating route..." }}
-    </div>
+		<!-- Directions -->
+		<div class="directions-bar text-center">
+			Directions: {{ directions_text|default:"Calculating route..." }}
+		</div>
+		<div id="turn-instruction" class="text-center text-info mt-2"></div>
+		<button id="toggle-steps" class="btn btn-secondary mb-2" disabled>Show Steps</button>
+		<div id="steps-list" class="text-white" style="display:none; max-height: 400px; overflow-y: auto;"></div>
 
-    <!-- Map -->
-    <div id="map" class="map-container"></div>
+		<!-- Map -->
+		<div id="map" class="map-container"></div>
 
-    <!-- Destination & ETA -->
-    <div class="info-bar text-center">
-        Destination: {{ destination|default:"Unknown" }} <br>
-        ETA: {{ eta|default:"--:--" }}
-    </div>
+		<!-- Destination & ETA -->
+		<div class="info-bar text-center">
+			Destination: {{ destination|default:"Unknown" }} <br>
+			ETA: {{ eta|default:"--:--" }}
+		</div>
 
-<!-- Panic + End Route Buttons -->
-<div class="d-grid gap-2">
-    <button id="panic-btn" class="btn btn-danger btn-panic">PANIC</button>
+		<!-- Panic + End Route Buttons -->
+		<div class="d-grid gap-2">
+			<button id="panic-btn" class="btn btn-danger btn-panic">PANIC</button>
 
-    <form method="post" action="{% url 'end_route' session.id %}">
-        {% csrf_token %}
-        <button type="submit" class="btn btn-warning btn-panic" 
-            onclick="return confirm('Are you sure you want to end the route?');">
-            END ROUTE
-        </button>
-    </form>
-</div>
+			<form method="post" action="{% url 'end_route' session.id %}">
+				{% csrf_token %}
+				<button type="submit" class="btn btn-warning btn-panic" 
+					onclick="return confirm('Are you sure you want to end the route?');">
+					END ROUTE
+				</button>
+			</form>
+		</div>
 
-<div id="feedback" class="mt-2 text-center text-white"></div>
+		<div id="feedback" class="mt-2 text-center text-white"></div>
 
-</div>
+	</div>
 
-<script>
-document.addEventListener("DOMContentLoaded", function() {
-    const feedback = document.getElementById("feedback");
+	<script>
+		document.addEventListener("DOMContentLoaded", function() {
+			const feedback = document.getElementById("feedback");
 
-    // ---------- PANIC BUTTON ----------
-    document.getElementById("panic-btn").addEventListener("click", () => {
-        fetch("{% url 'panic' %}", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "X-CSRFToken": "{{ csrf_token }}"
-            },
-            body: JSON.stringify({})
-        })
-        .then(res => res.json())
-        .then(data => {
-            feedback.textContent = data.message || "Panic sent!";
-            feedback.style.color = "red";
-        })
-        .catch(err => {
-            feedback.textContent = "Error sending panic!";
-            feedback.style.color = "orange";
-            console.error(err);
-        });
-    });
+			// ---------- PANIC BUTTON ----------
+			document.getElementById("panic-btn").addEventListener("click", () => {
+				fetch("{% url 'panic' %}", {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						"X-CSRFToken": "{{ csrf_token }}"
+					},
+					body: JSON.stringify({})
+				})
+				.then(res => res.json())
+				.then(data => {
+					feedback.textContent = data.message || "Panic sent!";
+					feedback.style.color = "red";
+				})
+				.catch(err => {
+					feedback.textContent = "Error sending panic!";
+					feedback.style.color = "orange";
+					console.error(err);
+				});
+			});
 
-    // ---------- MAP SETUP ----------
-    const map = L.map('map').setView([0, 0], 15);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '&copy; OpenStreetMap'
-    }).addTo(map);
+			// ---------- MAP SETUP ----------
+			const map = L.map('map').setView([0, 0], 15);
+			L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+				maxZoom: 19,
+				attribution: '&copy; OpenStreetMap'
+			}).addTo(map);
 
-    if (!navigator.geolocation) {
-        alert("Geolocation not supported by your browser.");
-        return;
-    }
+			if (!navigator.geolocation) {
+				alert("Geolocation not supported by your browser.");
+				return;
+			}
 
-    let userMarker = null;
-    let routeLayer = null; // Will hold the route line
+			let userMarker = null;
+			let routeLayer = null;
+			let steps = [];
+			let currentStepIndex = 0;
 
-    navigator.geolocation.watchPosition(pos => {
-        const lat = pos.coords.latitude;
-        const lon = pos.coords.longitude;
+			const toggleButton = document.getElementById("toggle-steps");
+			const stepsEl = document.getElementById("steps-list");
 
-        // Update user marker
-        if (!userMarker) {
-            map.setView([lat, lon], 16);
-            userMarker = L.marker([lat, lon]).addTo(map)
-                .bindPopup("You are here")
-                .openPopup();
-        } else {
-            userMarker.setLatLng([lat, lon]);
-        }
+			navigator.geolocation.watchPosition(pos => {
+				const lat = pos.coords.latitude;
+				const lon = pos.coords.longitude;
 
-        // Send coordinates to backend
-        fetch("{% url 'update_location' %}", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "X-CSRFToken": "{{ csrf_token }}"
-            },
-            body: JSON.stringify({ lat: lat, lon: lon })
-        }).catch(err => console.error("Location update failed:", err));
+				// Update user marker
+				if (!userMarker) {
+					map.setView([lat, lon], 16);
+					userMarker = L.marker([lat, lon]).addTo(map).bindPopup("You are here").openPopup();
+				} else {
+					userMarker.setLatLng([lat, lon]);
+				}
 
-        // ---------- DRAW ROUTE TO DESTINATION ----------
-        {% if destination_coords %}
-        const destLat = {{ destination_coords.0 }};
-        const destLon = {{ destination_coords.1 }};
+				// Send coordinates to backend
+				fetch("{% url 'update_location' %}", {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						"X-CSRFToken": "{{ csrf_token }}"
+					},
+					body: JSON.stringify({ lat: lat, lon: lon })
+				}).catch(err => console.error("Location update failed:", err));
 
-        fetch(`https://router.project-osrm.org/route/v1/driving/${lon},${lat};${destLon},${destLat}?overview=full&geometries=geojson`)
-        .then(res => res.json())
-        .then(data => {
-            if (data.routes && data.routes.length > 0) {
-                const route = data.routes[0].geometry;
+				// ---------- ROUTE + TURN UPDATES ----------
+				{% if destination_coords %}
+				const destLat = {{ destination_coords.0 }};
+				const destLon = {{ destination_coords.1 }};
 
-                // Remove previous route if exists
-                if (routeLayer) map.removeLayer(routeLayer);
+				// Fetch route once if not loaded
+				if (steps.length === 0) {
+					fetch(`https://router.project-osrm.org/route/v1/driving/${lon},${lat};${destLon},${destLat}?overview=full&geometries=geojson&steps=true`)
+					.then(res => res.json())
+					.then(data => {
+						if (data.routes && data.routes.length > 0) {
+							const route = data.routes[0].geometry;
+							if (routeLayer) map.removeLayer(routeLayer);
+							routeLayer = L.geoJSON(route, { color: 'blue', weight: 5 }).addTo(map);
 
-                // Add new route to map
-                routeLayer = L.geoJSON(route, { color: 'blue', weight: 5 }).addTo(map);
-            }
-        })
-        .catch(err => console.error("Route fetch failed:", err));
-        {% endif %}
+							steps = data.routes[0].legs[0].steps;
+							currentStepIndex = 0;
+							updateTurnInstruction();
 
-    }, err => console.error(err), {
-        enableHighAccuracy: true,
-        maximumAge: 0,
-        timeout: 5000
-    });
-});
-</script>
+							// enable steps button now that steps exist
+							toggleButton.disabled = false;
+						}
+					})
+					.catch(err => console.error("Route fetch failed:", err));
+				}
+
+				// Check proximity to next step
+				if (steps.length > 0 && currentStepIndex < steps.length) {
+					const step = steps[currentStepIndex];
+					const [stepLon, stepLat] = step.maneuver.location;
+					const distance = haversineDistance(lat, lon, stepLat, stepLon);
+
+					if (distance < 20) { // within 20 meters of next turn
+						currentStepIndex++;
+						updateTurnInstruction();
+					}
+				}
+				{% endif %}
+			}, err => console.error(err), {
+				enableHighAccuracy: true,
+				maximumAge: 0,
+				timeout: 5000
+			});
+
+			// ---------- Helper functions ----------
+			function updateTurnInstruction() {
+				const el = document.getElementById("turn-instruction");
+				if (currentStepIndex < steps.length) {
+					const nextStep = steps[currentStepIndex].maneuver.instruction || "Continue straight";
+					const distance = Math.round(steps[currentStepIndex].distance);
+					el.textContent = `Next: ${nextStep} (${distance} m)`;
+
+					// Optional voice prompt
+					if ('speechSynthesis' in window) {
+						const utterance = new SpeechSynthesisUtterance(`Next: ${nextStep}`);
+						speechSynthesis.speak(utterance);
+					}
+				} else {
+					el.textContent = "You’ve arrived at your destination!";
+				}
+			}
+
+			function renderStepsList() {
+				stepsEl.innerHTML = ""; // clear old list
+				steps.forEach((step, index) => {
+					const distance = Math.round(step.distance);
+					const instruction = step.maneuver.instruction || "Continue straight";
+					const li = document.createElement("div");
+					li.textContent = `${index + 1}. ${instruction} (${distance} m)`;
+					li.className = "p-1 border-bottom";
+					stepsEl.appendChild(li);
+				});
+			}
+
+			toggleButton.addEventListener("click", () => {
+				const mapEl = document.getElementById("map");
+
+				if (stepsEl.style.display === "none") {
+					mapEl.style.display = "none";       // hide map
+					stepsEl.style.display = "block";    // show steps
+					renderStepsList();                   // render the list
+					toggleButton.textContent = "Back to Map";
+				} else {
+					mapEl.style.display = "block";
+					stepsEl.style.display = "none";
+					toggleButton.textContent = "Show Steps";
+				}   
+			});
+
+			function haversineDistance(lat1, lon1, lat2, lon2) {
+				const R = 6371e3; // meters
+				const toRad = x => x * Math.PI / 180;
+				const φ1 = toRad(lat1), φ2 = toRad(lat2);
+				const Δφ = toRad(lat2 - lat1);
+				const Δλ = toRad(lon2 - lon1);
+				const a = Math.sin(Δφ / 2) ** 2 + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) ** 2;
+				return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+			}
+		});
+	</script>
 
 </body>
 </html>
