@@ -25,9 +25,15 @@ SECRET_KEY = 'django-insecure-mpw0&2!&3n99o_7$k)v3hyr&5-nd8sbn+ta&abhqj(n@(!q9=z
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    "nightguard-public-production.up.railway.app",
+    "127.0.0.1",
+    "localhost",
+]
 
-
+CSRF_TRUSTED_ORIGINS = [
+    "https://nightguard-public-production.up.railway.app",
+]
 # Application definition
 
 INSTALLED_APPS = [
